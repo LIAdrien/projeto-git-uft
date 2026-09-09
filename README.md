@@ -14,7 +14,7 @@ Projeto Integrador - Estrutura inicial, mapeamento de requisitos e documentaçã
 | :--- | :--- | :--- |
 | Laura Nicolle Anjos de Lima | @LIAdrien | Product Owner (PO) |
 | [Nome Completo 2] | @ | Scrum Master (SM) |
-| [Nome Completo 3] | @ | Desenvolvedor / Equipe Técnica |
+| Matheus Felipe dos Santos Pereira | Matheu4felipe | Desenvolvedor / Equipe Técnica |
 | Davi Pereira Borges | @pereiradavi-creator | Desenvolvedor / Equipe Técnica |
 | [Nome Completo 5] | @ | Desenvolvedor / Equipe Técnica |
 

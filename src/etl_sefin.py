@@ -77,6 +77,88 @@ class ColetorAPISefin:
         data_hoje = datetime.now().strftime("%Y%m%d_%H%M%S")
         caminho_bruto = f"data/bruto/divida_ativa_bruto_{data_hoje}.json"
         with open(caminho_bruto, "w", encoding="utf-8") as f:
+
+            # ==========================================
+# ENTREGÁVEL E2: PIPELINE ETL COMPLETO (etl_sefin.py)
+# ==========================================
+class PipelineETLSefin:
+    def _init_(self, arquivo_bruto):
+        self.arquivo_bruto = arquivo_bruto
+        self.df_raw = None
+        self.df_clean = None
+        self.df_pronto = None
+
+    def extrair(self):
+        logger.info("Iniciando Fase 1: Extração de Dados Brutos...")
+        with open(self.arquivo_bruto, "r", encoding="utf-8") as f:
+            dados = json.load(f)
+        self.df_raw = pd.DataFrame(dados)
+        logger.info(f"Extração concluída. Registros carregados: {len(self.df_raw)}")
+
+    def transformar_e_enriquecer(self):
+        logger.info("Iniciando Fase 2: Limpeza, Enriquecimento Socioeconômico e Engenharia de Atributos...")
+        df = self.df_raw.copy()
+
+        # 1. Limpeza e Validação LGPD (Anonimização parcial)
+        df['cpf_cnpj_anonimizado'] = df['cpf_cnpj'].apply(lambda x: x[:3] + ".*.*-" + x[-2:])
+        df['data_vencimento'] = pd.to_datetime(df['data_vencimento'])
+        
+        # 2. Engenharia de Atributos
+        hoje = pd.to_datetime(datetime.now().strftime("%Y-%m-%d"))
+        df['dias_inadimplente'] = (hoje - df['data_vencimento']).dt.days
+        df['anos_atraso'] = round(df['dias_inadimplente'] / 365.25, 2)
+        
+        # Faixas de Valor do Débito
+        condicoes_faixa = [
+            (df['valor_original'] <= 1000),
+            (df['valor_original'] > 1000) & (df['valor_original'] <= 10000),
+            (df['valor_original'] > 10000)
+        ]
+        rotulos_faixa = ['Baixo Valor (<=1k)', 'Médio Valor (1k-10k)', 'Alto Valor (>10k)']
+        df['faixa_valor'] = np.select(condicoes_faixa, rotulos_faixa, default='Outros')
+
+        # Sazonalidade do Vencimento
+        df['mes_vencimento'] = df['data_vencimento'].dt.month
+        df['trimestre_vencimento'] = df['data_vencimento'].dt.quarter
+
+        # 3. Enriquecimento Socioeconômico (Mapeamento de Indicadores IBGE por Setor Urbano de Palmas)
+        ibge_dados_setor = {
+            'Plano Diretor Sul': {'renda_per_capita_ibge': 4200.0, 'indice_vulnerabilidade': 0.15},
+            'Plano Diretor Norte': {'renda_per_capita_ibge': 2800.0, 'indice_vulnerabilidade': 0.30},
+            'Aureny III': {'renda_per_capita_ibge': 1500.0, 'indice_vulnerabilidade': 0.65},
+            'Aureny I': {'renda_per_capita_ibge': 1650.0, 'indice_vulnerabilidade': 0.60},
+            'Taquaralto': {'renda_per_capita_ibge': 1400.0, 'indice_vulnerabilidade': 0.70},
+            'Buritirana': {'renda_per_capita_ibge': 1100.0, 'indice_vulnerabilidade': 0.85}
+        }
+        
+        df_ibge = pd.DataFrame.from_dict(ibge_dados_setor, orient='index').reset_index()
+        df_ibge.rename(columns={'index': 'setor_urbano'}, inplace=True)
+        
+        # Merge de Enriquecimento
+        df = df.merge(df_ibge, on='setor_urbano', how='left')
+
+        # 4. Cálculo do Score de Recuperabilidade (Engenharia do Alvo)
+        # Score favorece menores prazos de atraso e maior capacidade socioeconômica do setor
+        fator_tempo = np.maximum(0, 1 - (df['dias_inadimplente'] / 1800))
+        fator_renda = df['renda_per_capita_ibge'] / 4200.0
+        df['score_recuperabilidade'] = round(((fator_tempo * 0.6) + (fator_renda * 0.4)) * 100, 2)
+
+        self.df_pronto = df
+        
+        # Salvando a base pronta
+        caminho_pronto = "data/pronto/divida_ativa_enriquecida.csv"
+        df.to_csv(caminho_pronto, index=False, encoding="utf-8")
+        logger.info(f"[E2 OK] ETL concluído e arquivo final persistido em '{caminho_pronto}'.")
+        return df
+
+    def carregar_no_banco(self, banco_path=":memory:"):
+        logger.info("Iniciando Carga de Dados no Banco Relacional (Sprint 2)...")
+        conn = sqlite3.connect(banco_path)
+        
+        # Carga dos dados limpos no SQLite
+        self.df_pronto.to_sql("divida_ativa_etl", conn, if_exists="replace", index=False)
+        conn.close()
+        logger.info("[E2 OK] Carga efetuada com sucesso na tabela 'divida_ativa_etl' do banco relacional.")
             json.dump(todos_dados, f, ensure_ascii=False, indent=2)
         
         logger.info(f"[E1 OK] Dados brutos preservados com sucesso em '{caminho_bruto}'. Total: {len(todos_dados)} registros.")

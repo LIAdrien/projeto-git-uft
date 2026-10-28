@@ -9,7 +9,7 @@
 
 ## 2. Divisão de Trabalho entre os 5 Integrantes
 - **Integrante 1:** Desenvolvimento do script de consumo da API (E1), paginação e tratamento de rate-limiting.
-- **Integrante 2:** Construção da limpeza de dados, anonimização LGPD e regras do IPTU Social.
+- **Davi Pereira Borges:** Construção da limpeza de dados, anonimização LGPD e regras do IPTU Social.
 - **Integrante 3:** Enriquecimento socioeconômico com dados do IBGE e engenharia de atributos (Faixas, Sazonalidade, Score).
 - **Integrante 4:** Elaboração do painel de EDA, geração dos gráficos e mapa geoespacial por setor urbano (E3).
 - **Integrante 5:** Estruturação dos logs de execução, validação da reprodutibilidade e escrita da documentação/README (E4).

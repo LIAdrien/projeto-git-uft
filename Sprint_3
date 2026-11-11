@@ -1,0 +1,56 @@
+UNIVERSIDADE FEDERAL DO TOCANTINS
+Bacharelado Interdisciplinar em Inteligência Artificial — BIINAR
+Eixo II — Projeto Integrador: Inteligência Tributária (Sefin Palmas) | 2026/2
+TAREFA DO PROJETO INTEGRADOR
+SPRINT 3 — PIPELINE ETL
+Coleta automatizada, transformação e análise exploratória
+Período: 13/10 a 27/10/2026  |  Entrega: Terça-feira, 27/10/2026, até as 23h59 (encerramento do Módulo 5)
+Coordenação: Prof. Dr. David Nadler Prata  |  Apoio: docentes dos módulos âncora do Eixo II
+  1. Identificação  
+
+Projeto	Sistema de Inteligência Tributária — priorização da cobrança da dívida ativa de Palmas-TO (Opção D)
+Sprint	SPRINT 3 — PIPELINE ETL (13/10 a 27/10/2026)
+Módulo(s) âncora	Módulo 5 — Coleta, Raspagem e Transformação Digital de Dados
+Entrega	Terça-feira, 27/10/2026, até as 23h59 (encerramento do Módulo 5)
+Modalidade	Em equipe — 5 integrantes (equipes formalizadas na Sprint 0)
+Como entregar	Repositório Git da equipe (branch da sprint mesclada) + artefatos em /docs; link enviado à coordenação
+Peso	O Projeto Integrador corresponde a 30% da nota final do Eixo II
+
+  2. Objetivo da sprint  
+
+Fazer o dado fluir sozinho: coleta automatizada via API da Prefeitura de Palmas e Portal de Dados Abertos, pipeline ETL completo com enriquecimento socioeconômico (IBGE) e engenharia de atributos, e o Relatório de Análise Exploratória que revela os padrões da inadimplência.
+
+  3. Entregáveis  
+
+E1 — Script de coleta automatizada. Coleta via API REST da Prefeitura (autenticação, paginação e rate-limiting tratados) e demais fontes mapeadas — não é aceita base estática do Kaggle. Dados brutos preservados e datados em data/bruto.
+E2 — Pipeline ETL funcional de ponta a ponta. Script único (etl_sefin.py) com extração, limpeza documentada, enriquecimento com variáveis socioeconômicas do IBGE, engenharia de atributos (tempo de inadimplência, sazonalidade, faixas de valor) e carga no banco da Sprint 2 — com validações de qualidade e logs de execução.
+E3 — Relatório de EDA. Análise exploratória com estatísticas descritivas e visualizações honestas (evolução, composição, distribuição, relação), incluindo o mapa geoespacial de inadimplência por setor urbano de Palmas, cada gráfico com sua frase de leitura.
+E4 — Reprodutibilidade. README atualizado: como executar o pipeline do zero, dependências, estrutura de pastas (bruto/limpo/pronto) e divisão de trabalho da equipe nesta sprint.
+
+  4. Marcos semanais (cronograma do PI)  
+
+Semana	Marco
+12/10 a 16/10	Script de coleta via API validado + primeiro lote de dados brutos extraído
+19/10 a 23/10	Base limpa e enriquecida com IBGE; engenharia de atributos implementada
+26/10 a 27/10	ENTREGA Sprint 3: ETL de ponta a ponta + Relatório de EDA com mapa geoespacial
+
+  5. Critérios de avaliação (rubrica)  
+
+Critério	O que será observado	Peso
+Coleta (E1)	API consumida com robustez e ética; bruto preservado e datado	25%
+Pipeline ETL (E2)	Ponta a ponta, com enriquecimento, validações e logs	35%
+EDA (E3)	Visualizações corretas e honestas; mapa geoespacial; frases de leitura	25%
+Reprodutibilidade (E4)	Reconstrói do zero seguindo só o README	15%
+
+  6. Orientações e combinados  
+
+•	A entrega é por equipe (5 integrantes); a participação individual é conferida pelo histórico de commits, pelos pull requests e pelo diário de bordo.
+•	As tarefas semanais do Módulo 5 são os degraus desta entrega — quem as fez em dia já tem quase tudo pronto.
+•	Orientações éticas valem integralmente: robots.txt, delays nas requisições, fontes oficiais e nenhum dado pessoal além do necessário (anonimização antes do armazenamento).
+•	Ética na coleta e no tratamento, sempre: fontes oficiais, robots.txt respeitado, delays nas requisições, nenhum dado pessoal além do necessário e anonimização antes do armazenamento (LGPD).
+•	Atrasos: entregas após o prazo recebem desconto de 20% por dia útil, salvo justificativa acordada previamente com a coordenação.
+
+Por que esta sprint importa
+O sistema não pode depender de download manual: dados frescos, todo dia, sem clique.
+O modelo da Sprint 4 será treinado exatamente sobre a base que este pipeline entrega.
+

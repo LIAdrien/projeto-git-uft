@@ -1,0 +1,21 @@
+### Data: 15/11/2026
+**Atividades Realizadas (Sprint 4 - Parte 1/2):**
+- Iniciei a execução do notebook `sprint4_modelos.ipynb`, assumindo a responsabilidade pelas seções 1 a 4 do documento.
+- **Seção 2 (Governança):** Apliquei a regra de negócio para isolar o grupo protegido, garantindo a exclusão dos beneficiários do IPTU Social antes de qualquer modelagem.
+- **Seção 3 (Split Temporal):** Implementei a separação dos dados de treino e teste respeitando a ordem cronológica (corte em abril/2026), garantindo que não houvesse sobreposição temporal e evitando o vazamento de dados do futuro para o passado.
+- **Seção 4 (Pré-processamento):** Configurei o `Pipeline` do scikit-learn com `ColumnTransformer`, imputação pela mediana e `StandardScaler` para os dados numéricos, e `OneHotEncoder` para os categóricos, garantindo o ajuste seguro nas dobras.
+
+**Dificuldades:**
+- Garantir que a exclusão dos dados sensíveis ocorresse antes do split para não afetar as dobras de validação.
+
+**Solução:**
+- Encapsular todo o tratamento dentro do Pipeline e rodar os testes de verificação (`assert`) para confirmar que nenhum contribuinte do teste vazou para o treino.
+
+**Próximos Passos / Handover:**
+- Márcio Alessandro assumiu o desenvolvimento das seções finais (5 a 9), sendo responsável por:
+    - **Seção 5:** Comparação dos baselines na validação temporal (`TimeSeriesSplit`) usando classificador trivial, Regressão Logística e Árvore de Decisão.
+    - **Seção 6:** Tunagem de hiperparâmetros do *Random Forest* (via `GridSearchCV`) e seleção do modelo vencedor com base no ROC-AUC.
+    - **Seção 7:** Calibração do limiar operacional do Modelo 1, avaliação final no conjunto de teste e extração das métricas por subgrupo (renda e setor).
+    - **Seção 8 (Scoring):** Filtragem dos contribuintes com dívida inscrita, treinamento e avaliação do Modelo 2 (Recuperabilidade) e cálculo da curva de priorização pelo retorno esperado, triando em faixas (Alta, Média e Baixa).
+    - **Seção 9 (Serialização):** Exportação dos modelos via `joblib` para a pasta `/models` e geração do manifesto `metadados_modelos.json` com semente, versões e limiares calibrados, validando o recarregamento (smoke test).
+- Fazer a revisão cruzada do Pull Request dele antes do merge na `main`.

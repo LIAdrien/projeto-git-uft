@@ -13,7 +13,7 @@ Projeto Integrador - Estrutura inicial, mapeamento de requisitos e documentaçã
 | Nome do Integrante | Usuário GitHub (@) | Papel Principal no Time |
 | :--- | :--- | :--- |
 | Laura Nicolle Anjos de Lima | @LIAdrien | Product Owner (PO) |
-| [Nome Completo 2] | @ | Scrum Master (SM) |
+| Marcio Alessandro de Araujo Milhomens | @rsmarcioalessandro-stack | Scrum Master (SM) |
 | Matheus Felipe dos Santos Pereira | @Matheu4felipe | Desenvolvedor / Equipe Técnica |
 | Davi Pereira Borges | @pereiradavi-creator | Desenvolvedor / Equipe Técnica |
 | [Nome Completo 5] | @ | Desenvolvedor / Equipe Técnica |

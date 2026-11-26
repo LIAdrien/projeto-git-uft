@@ -19,3 +19,11 @@
     - **Seção 8 (Scoring):** Filtragem dos contribuintes com dívida inscrita, treinamento e avaliação do Modelo 2 (Recuperabilidade) e cálculo da curva de priorização pelo retorno esperado, triando em faixas (Alta, Média e Baixa).
     - **Seção 9 (Serialização):** Exportação dos modelos via `joblib` para a pasta `/models` e geração do manifesto `metadados_modelos.json` com semente, versões e limiares calibrados, validando o recarregamento (smoke test).
 - Fazer a revisão cruzada do Pull Request dele antes do merge na `main`.
+
+---
+
+### Registro de Governança e Histórico do Repositório
+**Transferência de Product Owner e Titularidade:**
+- **Titularidade Original:** O papel de *Product Owner* e a propriedade do repositório `projeto-git-uft` pertenciam anteriormente à integrante **Laura Nicolle** (`https://github.com/LIAdrien/projeto-git-uft`).
+- **Nova Titularidade:** Para viabilizar o deploy contínuo e a publicação oficial do painel Streamlit da Sprint 4/5 com permissão de administrador, o papel de *Product Owner* e a titularidade do repositório foram transferidos para **Davi Pereira** (`https://github.com/pereiradavi-creator/projeto-git-uft`).
+- **Redirecionamento e Links:** Os links antigos do GitHub redirecionam automaticamente para o novo endereço, e a URL oficial da aplicação publicada no Streamlit Cloud foi atualizada no `README.md`.

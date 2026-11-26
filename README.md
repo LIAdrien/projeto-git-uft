@@ -19,7 +19,9 @@ Projeto Integrador - Estrutura inicial, mapeamento de requisitos e documentaçã
 | [Nome Completo 5] | @ | Desenvolvedor / Equipe Técnica |
 
 * **Link do Repositório GitHub:** https://github.com/usuario/nome-do-repositorio
-* **Link do Painel Tributario:** https://paineltributariosintetico.streamlit.app
+* ## 📊 Painel Interativo — Inteligência Tributária (IPTU Palmas-TO)
+
+👉 **[Acessar o Painel Publicado no Streamlit Cloud](https://paineltributariosintetico.streamlit.appI)**
 
 ---
 

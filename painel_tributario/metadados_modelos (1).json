@@ -1,0 +1,72 @@
+{
+  "data_treinamento": "2026-11-16T00:59:31",
+  "semente": 42,
+  "versoes": {
+    "python": "3.13.18",
+    "pandas": "2.2.3",
+    "scikit_learn": "1.6.1",
+    "joblib": "1.6.0"
+  },
+  "atributos_entrada": [
+    "tipo_imovel",
+    "setor_urbano",
+    "area_construida_m2",
+    "valor_venal",
+    "valor_iptu_anual",
+    "distancia_centro_km",
+    "exercicios_inadimplentes_5a",
+    "tempo_inadimplencia_dias",
+    "valor_divida_consolidada",
+    "qtd_parcelamentos_anteriores",
+    "parcelamento_rompido",
+    "qtd_notificacoes"
+  ],
+  "categoricos": [
+    "tipo_imovel",
+    "setor_urbano"
+  ],
+  "numericos": [
+    "area_construida_m2",
+    "valor_venal",
+    "valor_iptu_anual",
+    "distancia_centro_km",
+    "exercicios_inadimplentes_5a",
+    "tempo_inadimplencia_dias",
+    "valor_divida_consolidada",
+    "qtd_parcelamentos_anteriores",
+    "parcelamento_rompido",
+    "qtd_notificacoes"
+  ],
+  "exclusao_obrigatoria": "iptu_social == 0",
+  "modelo_1_inadimplencia": {
+    "arquivo": "modelo_inadimplencia.joblib",
+    "algoritmo": "regressão logística",
+    "alvo": "inadimplente_proximo_exercicio",
+    "limiar_operacional": 0.35,
+    "metricas_teste": {
+      "roc_auc": 0.7069,
+      "acuracia": 0.6113,
+      "precisao": 0.5758,
+      "recall": 0.8658,
+      "f1": 0.6916
+    }
+  },
+  "modelo_2_recuperabilidade": {
+    "arquivo": "modelo_recuperabilidade.joblib",
+    "algoritmo": "regressão logística",
+    "alvo": "divida_recuperada_12m",
+    "filtro_universo": "valor_divida_consolidada > 0",
+    "faixas": {
+      "alta": "> 0.66",
+      "media": "0.33 a 0.66",
+      "baixa": "< 0.33"
+    },
+    "metricas_teste": {
+      "roc_auc": 0.6842,
+      "acuracia": 0.6367,
+      "precisao": 0.6423,
+      "recall": 0.7154,
+      "f1": 0.6769
+    }
+  }
+}

@@ -68,6 +68,8 @@ button[data-baseweb="tab"]{font-weight:700}
 button[data-baseweb="tab"][aria-selected="true"]{color:#00B26F !important}
 div[data-baseweb="tab-highlight"]{background-color:#00B26F !important;height:3px}
 div[data-baseweb="slider"] [role="slider"]{background-color:#00B26F !important}
+.rodape{margin-top:2rem;padding-top:.8rem;border-top:1px solid rgba(128,128,128,.25);
+        font-size:.82rem;opacity:.8;text-align:center}
 </style>
 """
 
@@ -106,6 +108,16 @@ def pct(valor: float) -> str:
     return f"{valor * 100:.1f}%".replace(".", ",")
 
 
+def classificar_faixa(prob: float) -> str:
+    if pd.isna(prob):
+        return "-"
+    if prob > LIM_ALTA:
+        return "Alta"
+    if prob >= LIM_BAIXA:
+        return "Média"
+    return "Baixa"
+
+
 def mostrar_tabela(df: pd.DataFrame, **kwargs) -> None:
     try:
         st.dataframe(df, width="stretch", hide_index=True, **kwargs)
@@ -127,8 +139,19 @@ def mostrar_grafico(grafico) -> None:
 def carregar_modelos():
     with open(localizar("metadados_modelos.json"), encoding="utf-8") as f:
         meta = json.load(f)
-    modelo_inad = joblib.load(localizar(meta["modelo_1_inadimplencia"]["arquivo"]))
-    modelo_rec = joblib.load(localizar(meta["modelo_2_recuperabilidade"]["arquivo"]))
+    try:
+        modelo_inad = joblib.load(localizar(meta["modelo_1_inadimplencia"]["arquivo"]))
+        modelo_rec = joblib.load(localizar(meta["modelo_2_recuperabilidade"]["arquivo"]))
+    except Exception as erro:
+        import sklearn
+
+        versao_treino = meta.get("versoes", {}).get("scikit_learn", "desconhecida")
+        raise RuntimeError(
+            f"Erro ao carregar os modelos ({type(erro).__name__}: {erro}).\n\n"
+            f"• scikit-learn instalado neste ambiente: {sklearn.__version__}\n"
+            f"• scikit-learn usado no treino: {versao_treino}\n\n"
+            f"Fixe `scikit-learn=={versao_treino}` no requirements.txt e use Python 3.13."
+        ) from erro
     return meta, modelo_inad, modelo_rec
 
 
@@ -148,6 +171,9 @@ def _proba_positiva(modelo, X: pd.DataFrame) -> np.ndarray:
 def pontuar(carteira: pd.DataFrame, meta: dict, modelo_inad, modelo_rec) -> pd.DataFrame:
     """Exclusão obrigatória (iptu_social == 0) + probabilidades dos dois modelos."""
     base = carteira.query(meta["exclusao_obrigatoria"]).copy()
+    if base.empty:
+        return base
+
     X = base[meta["atributos_entrada"]]
 
     limiar = meta["modelo_1_inadimplencia"]["limiar_operacional"]
@@ -156,7 +182,8 @@ def pontuar(carteira: pd.DataFrame, meta: dict, modelo_inad, modelo_rec) -> pd.D
 
     com_divida = base["valor_divida_consolidada"] > 0
     base["prob_recuperacao"] = np.nan
-    base.loc[com_divida, "prob_recuperacao"] = _proba_positiva(modelo_rec, X[com_divida])
+    if com_divida.any():
+        base.loc[com_divida, "prob_recuperacao"] = _proba_positiva(modelo_rec, X[com_divida])
 
     p = base["prob_recuperacao"]
     faixa = pd.Series(
@@ -183,7 +210,7 @@ def resumo_por_setor(situacao: pd.DataFrame, base: pd.DataFrame) -> pd.DataFrame
     """Tabela agregada por setor (sem identificar pessoas)."""
     cont = pd.crosstab(situacao["setor_urbano"], situacao["situacao"]).reindex(columns=SITUACOES, fill_value=0)
     cont["Total"] = cont.sum(axis=1)
-    cont["% em dia"] = cont["Em dia"] / cont["Total"]
+    cont["% em dia"] = cont["Em dia"] / cont["Total"].replace(0, np.nan)
     em_dia_alerta = (
         base[(base["valor_divida_consolidada"] == 0) & (base["alerta_inadimplencia"])]
         .groupby("setor_urbano")
@@ -214,11 +241,95 @@ def projecao(devedores: pd.DataFrame, variacao: float) -> tuple[float, float, fl
 # --------------------------------------------------------------------------- #
 # Interface
 # --------------------------------------------------------------------------- #
-def aba_ranking(devedores: pd.DataFrame) -> None:
+def simulador_caso(base: pd.DataFrame, meta: dict, modelo_inad, modelo_rec) -> None:
+    """Consulta de registro sintético + simulação 'E se...' com proteção contra ausência de colunas."""
+    with st.expander("Consultar contribuinte sintético ou simular cenário ('E se...')"):
+        if base.empty:
+            st.info("Sem registros elegíveis para simulação.")
+            return
+
+        ids_disponiveis = base[COL_ID].astype(str).tolist()
+        id_escolhido = st.selectbox(
+            "Selecionar ID sintético de referência",
+            options=ids_disponiveis,
+            index=0,
+            key="simulador_id",
+        )
+        registro = base[base[COL_ID].astype(str) == id_escolhido].iloc[0].copy()
+        atributos = meta["atributos_entrada"]
+
+        cols = st.columns(4)
+        idx_col = 0
+
+        if "valor_divida_consolidada" in atributos:
+            registro["valor_divida_consolidada"] = cols[idx_col % 4].number_input(
+                "Dívida consolidada (R$)",
+                min_value=0.0,
+                value=float(registro["valor_divida_consolidada"]),
+                step=100.0,
+            )
+            idx_col += 1
+
+        if "tempo_inadimplencia_dias" in atributos:
+            registro["tempo_inadimplencia_dias"] = cols[idx_col % 4].number_input(
+                "Tempo inadimplência (dias)",
+                min_value=0,
+                value=int(registro["tempo_inadimplencia_dias"]),
+                step=30,
+            )
+            idx_col += 1
+
+        if "qtd_parcelamentos_anteriores" in atributos:
+            registro["qtd_parcelamentos_anteriores"] = cols[idx_col % 4].number_input(
+                "Parcelamentos anteriores",
+                min_value=0,
+                max_value=20,
+                value=int(registro["qtd_parcelamentos_anteriores"]),
+                step=1,
+            )
+            idx_col += 1
+
+        if "qtd_notificacoes" in atributos:
+            registro["qtd_notificacoes"] = cols[idx_col % 4].number_input(
+                "Notificações emitidas",
+                min_value=0,
+                max_value=30,
+                value=int(registro["qtd_notificacoes"]),
+                step=1,
+            )
+
+        divida_sim = float(registro.get("valor_divida_consolidada", 0.0))
+        X_caso = pd.DataFrame([registro[atributos]])
+        prob_inad = float(_proba_positiva(modelo_inad, X_caso)[0])
+        limiar = meta["modelo_1_inadimplencia"]["limiar_operacional"]
+
+        if divida_sim > 0:
+            prob_rec = float(_proba_positiva(modelo_rec, X_caso)[0])
+            faixa = classificar_faixa(prob_rec)
+            ret_esp = divida_sim * prob_rec
+        else:
+            prob_rec = np.nan
+            faixa = "Sem dívida ativa"
+            ret_esp = 0.0
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric(
+            "Risco de inadimplência",
+            pct(prob_inad),
+            delta="Com alerta" if prob_inad >= limiar else "Abaixo do limiar",
+            delta_color="off",
+        )
+        m2.metric("Chance de recuperar (12m)", pct(prob_rec) if divida_sim > 0 else "N/A")
+        m3.metric("Faixa", faixa)
+        m4.metric("Retorno esperado", brl(ret_esp))
+
+
+def aba_ranking(devedores: pd.DataFrame, base: pd.DataFrame, meta: dict, modelo_inad, modelo_rec) -> None:
     st.subheader("Quem cobrar primeiro")
     st.caption("Retorno esperado = valor da dívida × chance de recuperar em 12 meses.")
     if devedores.empty:
         st.info("Nenhum devedor com os filtros escolhidos.")
+        simulador_caso(base, meta, modelo_inad, modelo_rec)
         return
 
     c1, c2, c3 = st.columns(3)
@@ -226,7 +337,7 @@ def aba_ranking(devedores: pd.DataFrame) -> None:
     c2.metric("Dívida total", brl_curto(devedores["valor_divida_consolidada"].sum()))
     c3.metric("Retorno esperado", brl_curto(devedores["retorno_esperado"].sum()))
 
-    col_a, col_b = st.columns([2, 1])
+    col_a, col_b, col_c = st.columns([2, 1, 1])
     criterio = col_a.radio(
         "Ordenar por",
         ["Retorno esperado", "Chance de recuperação", "Valor da dívida"],
@@ -237,45 +348,57 @@ def aba_ranking(devedores: pd.DataFrame) -> None:
         "Chance de recuperação": "prob_recuperacao",
         "Valor da dívida": "valor_divida_consolidada",
     }
+    busca_id = col_b.text_input("Buscar ID sintético", placeholder="Ex.: CONT_0012")
     n_max = len(devedores)
     if n_max > 1:
-        top_n = col_b.slider("Linhas", 1, min(200, n_max), min(20, n_max))
+        top_n = col_c.slider("Linhas", 1, min(200, n_max), min(20, n_max))
     else:
         top_n = 1
 
-    ranking = devedores.sort_values(mapa[criterio], ascending=False).head(top_n).copy()
-    ranking.insert(0, "posicao", np.arange(1, len(ranking) + 1))
-    ranking = ranking[
-        [
-            "posicao",
-            COL_ID,
-            "setor_urbano",
-            "valor_divida_consolidada",
-            "prob_recuperacao",
-            "faixa_recuperabilidade",
-            "retorno_esperado",
+    filtrados = devedores
+    if busca_id.strip():
+        filtrados = filtrados[
+            filtrados[COL_ID].astype(str).str.contains(busca_id.strip(), case=False, na=False)
         ]
-    ]
-    mostrar_tabela(
-        ranking,
-        column_config={
-            "posicao": st.column_config.NumberColumn("#", width="small"),
-            COL_ID: st.column_config.TextColumn("ID sintético"),
-            "setor_urbano": st.column_config.TextColumn("Setor"),
-            "valor_divida_consolidada": st.column_config.NumberColumn("Dívida (R$)", format="%.2f"),
-            "prob_recuperacao": st.column_config.ProgressColumn(
-                "Chance de recuperar", min_value=0.0, max_value=1.0, format="percent"
-            ),
-            "faixa_recuperabilidade": st.column_config.TextColumn("Faixa"),
-            "retorno_esperado": st.column_config.NumberColumn("Retorno esperado (R$)", format="%.2f"),
-        },
-    )
-    st.download_button(
-        "Baixar esta lista (CSV)",
-        data=ranking.to_csv(index=False, sep=";", decimal=",", encoding="utf-8-sig"),
-        file_name="ranking_recuperabilidade.csv",
-        mime="text/csv",
-    )
+
+    if filtrados.empty:
+        st.warning(f"Nenhum devedor encontrado para a busca '{busca_id}'.")
+    else:
+        ranking = filtrados.sort_values(mapa[criterio], ascending=False).head(top_n).copy()
+        ranking.insert(0, "posicao", np.arange(1, len(ranking) + 1))
+        ranking = ranking[
+            [
+                "posicao",
+                COL_ID,
+                "setor_urbano",
+                "valor_divida_consolidada",
+                "prob_recuperacao",
+                "faixa_recuperabilidade",
+                "retorno_esperado",
+            ]
+        ]
+        mostrar_tabela(
+            ranking,
+            column_config={
+                "posicao": st.column_config.NumberColumn("#", width="small"),
+                COL_ID: st.column_config.TextColumn("ID sintético"),
+                "setor_urbano": st.column_config.TextColumn("Setor"),
+                "valor_divida_consolidada": st.column_config.NumberColumn("Dívida (R$)", format="%.2f"),
+                "prob_recuperacao": st.column_config.ProgressColumn(
+                    "Chance de recuperar", min_value=0.0, max_value=1.0, format="percent"
+                ),
+                "faixa_recuperabilidade": st.column_config.TextColumn("Faixa"),
+                "retorno_esperado": st.column_config.NumberColumn("Retorno esperado (R$)", format="%.2f"),
+            },
+        )
+        st.download_button(
+            "Baixar esta lista (CSV)",
+            data=ranking.to_csv(index=False, sep=";", decimal=",", encoding="utf-8-sig"),
+            file_name="ranking_recuperabilidade.csv",
+            mime="text/csv",
+        )
+
+    simulador_caso(base, meta, modelo_inad, modelo_rec)
 
 
 def aba_mapa_calor(base: pd.DataFrame) -> None:
@@ -343,8 +466,10 @@ def aba_projecao(devedores: pd.DataFrame) -> None:
     top = ordenado.head(capacidade)
     pior, esp, melhor = projecao(top, variacao)
     _, esp_total, _ = projecao(devedores, variacao)
+    divida_top = float(top["valor_divida_consolidada"].sum())
+    taxa_rec_media = (esp / divida_top) if divida_top > 0 else 0.0
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Pior caso", brl_curto(pior))
     c2.metric(
         "Esperado",
@@ -353,6 +478,7 @@ def aba_projecao(devedores: pd.DataFrame) -> None:
         delta_color="off",
     )
     c3.metric("Melhor caso", brl_curto(melhor))
+    c4.metric("Taxa média de recuperação", pct(taxa_rec_media))
 
     col_g1, col_g2 = st.columns(2)
 
@@ -444,8 +570,11 @@ def aba_carteira(situacao: pd.DataFrame, base: pd.DataFrame) -> None:
     mostrar_grafico(barras)
 
     resumo = resumo_por_setor(situacao, base)
+    tabela_exibicao = resumo[
+        ["setor_urbano", "Total", "Em dia", "Com dívida", "Isento (IPTU Social)", "% em dia", "Em dia com alerta de risco"]
+    ]
     mostrar_tabela(
-        resumo[["setor_urbano", "Total", "Em dia", "Com dívida", "Isento (IPTU Social)", "% em dia", "Em dia com alerta de risco"]],
+        tabela_exibicao,
         column_config={
             "setor_urbano": st.column_config.TextColumn("Setor"),
             "% em dia": st.column_config.ProgressColumn("% em dia", min_value=0.0, max_value=1.0, format="percent"),
@@ -455,6 +584,108 @@ def aba_carteira(situacao: pd.DataFrame, base: pd.DataFrame) -> None:
         },
     )
     st.caption("“Em dia, com alerta” são candidatos a ações educativas, não à cobrança.")
+    st.download_button(
+        "Baixar relatório gerencial por setor (CSV)",
+        data=tabela_exibicao.to_csv(index=False, sep=";", decimal=",", encoding="utf-8-sig"),
+        file_name="relatorio_carteira_por_setor.csv",
+        mime="text/csv",
+    )
+
+
+def aba_modelos_subgrupos(base: pd.DataFrame, meta: dict) -> None:
+    """Desempenho dos modelos (Sprint 4) e monitoramento por subgrupo (base Sprint 5)."""
+    st.subheader("Avaliação dos modelos e monitoramento por subgrupo")
+    st.caption(
+        "Métricas registradas no conjunto de teste e distribuição dos scores por faixa de renda "
+        "e setor urbano (apoio à análise de equidade / fairness)."
+    )
+
+    m1 = meta["modelo_1_inadimplencia"]["metricas_teste"]
+    m2 = meta["modelo_2_recuperabilidade"]["metricas_teste"]
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"**Modelo 1 — Risco de Inadimplência** (`{meta['modelo_1_inadimplencia']['algoritmo']}`)")
+        df_m1 = pd.DataFrame(
+            [
+                {"Métrica": "ROC-AUC", "Valor": pct(m1["roc_auc"])},
+                {"Métrica": "Recall (Sensibilidade)", "Valor": pct(m1["recall"])},
+                {"Métrica": "Precisão", "Valor": pct(m1["precisao"])},
+                {"Métrica": "F1-Score", "Valor": pct(m1["f1"])},
+                {"Métrica": "Acurácia", "Valor": pct(m1["acuracia"])},
+            ]
+        )
+        mostrar_tabela(df_m1)
+
+    with col2:
+        st.markdown(f"**Modelo 2 — Recuperabilidade 12m** (`{meta['modelo_2_recuperabilidade']['algoritmo']}`)")
+        df_m2 = pd.DataFrame(
+            [
+                {"Métrica": "ROC-AUC", "Valor": pct(m2["roc_auc"])},
+                {"Métrica": "Recall (Sensibilidade)", "Valor": pct(m2["recall"])},
+                {"Métrica": "Precisão", "Valor": pct(m2["precisao"])},
+                {"Métrica": "F1-Score", "Valor": pct(m2["f1"])},
+                {"Métrica": "Acurácia", "Valor": pct(m2["acuracia"])},
+            ]
+        )
+        mostrar_tabela(df_m2)
+
+    if "faixa_renda_setor" in base.columns and not base.empty:
+        st.markdown("### Distribuição dos scores por faixa de renda do setor")
+        sub_renda = (
+            base.groupby("faixa_renda_setor", observed=True)
+            .agg(
+                imoveis=(COL_ID, "size"),
+                risco_medio=("prob_inadimplencia", "mean"),
+                taxa_alerta=("alerta_inadimplencia", "mean"),
+                recup_media=("prob_recuperacao", "mean"),
+            )
+            .reindex(ORDEM_RENDA)
+            .dropna(how="all")
+            .reset_index()
+        )
+        mostrar_tabela(
+            sub_renda,
+            column_config={
+                "faixa_renda_setor": st.column_config.TextColumn("Faixa de renda do setor"),
+                "imoveis": st.column_config.NumberColumn("Imóveis avaliados", format="%d"),
+                "risco_medio": st.column_config.ProgressColumn("Risco médio previsto", min_value=0.0, max_value=1.0, format="percent"),
+                "taxa_alerta": st.column_config.ProgressColumn("% com alerta de risco", min_value=0.0, max_value=1.0, format="percent"),
+                "recup_media": st.column_config.ProgressColumn("Recuperabilidade média", min_value=0.0, max_value=1.0, format="percent"),
+            },
+        )
+
+        df_long = sub_renda.melt(
+            id_vars="faixa_renda_setor",
+            value_vars=["risco_medio", "recup_media"],
+            var_name="indicador",
+            value_name="taxa",
+        )
+        df_long["indicador"] = df_long["indicador"].map(
+            {"risco_medio": "Risco médio previsto", "recup_media": "Recuperabilidade média"}
+        )
+        grafico_sub = (
+            alt.Chart(df_long)
+            .mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5)
+            .encode(
+                x=alt.X("faixa_renda_setor:N", sort=ORDEM_RENDA, title="Faixa de renda do setor", axis=alt.Axis(labelAngle=0)),
+                y=alt.Y("taxa:Q", title="Média do grupo", axis=alt.Axis(format="%")),
+                xOffset="indicador:N",
+                color=alt.Color(
+                    "indicador:N",
+                    title=None,
+                    scale=alt.Scale(range=[LARANJA, VERDE]),
+                    legend=alt.Legend(orient="bottom"),
+                ),
+                tooltip=[
+                    alt.Tooltip("faixa_renda_setor:N", title="Faixa de renda"),
+                    alt.Tooltip("indicador:N", title="Indicador"),
+                    alt.Tooltip("taxa:Q", title="Valor", format=".1%"),
+                ],
+            )
+            .properties(title="Comparativo entre subgrupos socioeconômicos (base sintética)", height=280)
+        )
+        mostrar_grafico(grafico_sub)
 
 
 def barra_lateral(meta: dict) -> None:
@@ -502,7 +733,7 @@ def main() -> None:
     try:
         meta, modelo_inad, modelo_rec = carregar_modelos()
         carteira = carregar_carteira()
-    except FileNotFoundError as erro:
+    except (FileNotFoundError, RuntimeError) as erro:
         st.error(str(erro))
         st.stop()
 
@@ -525,26 +756,62 @@ def main() -> None:
         setores = sorted(devedores_todos["setor_urbano"].unique())
         sel_setores = st.multiselect("Setor", setores, default=setores)
         sel_faixas = st.multiselect("Faixa de recuperabilidade", FAIXAS, default=FAIXAS)
+
+        if "faixa_renda_setor" in devedores_todos.columns:
+            rendas_presentes = [
+                r for r in ORDEM_RENDA if r in devedores_todos["faixa_renda_setor"].dropna().unique()
+            ]
+            sel_rendas = st.multiselect("Faixa de renda do setor", rendas_presentes, default=rendas_presentes)
+        else:
+            sel_rendas = None
+
+        max_divida = float(devedores_todos["valor_divida_consolidada"].max()) if not devedores_todos.empty else 0.0
+        divida_min = st.number_input(
+            "Dívida mínima (R$)",
+            min_value=0.0,
+            max_value=max(max_divida, 0.0),
+            value=0.0,
+            step=100.0,
+        )
         st.caption("Valem para o ranking e a projeção.")
 
-    devedores = devedores_todos[
+    condicao = (
         devedores_todos["setor_urbano"].isin(sel_setores)
         & devedores_todos["faixa_recuperabilidade"].isin(sel_faixas)
-    ]
+        & (devedores_todos["valor_divida_consolidada"] >= divida_min)
+    )
+    if sel_rendas is not None:
+        condicao = condicao & devedores_todos["faixa_renda_setor"].isin(sel_rendas)
 
-    aba1, aba2, aba3, aba4 = st.tabs(
-        ["Quem cobrar primeiro", "Onde está o risco", "Quanto arrecadar", "Situação da carteira"]
+    devedores = devedores_todos[condicao]
+
+    aba1, aba2, aba3, aba4, aba5 = st.tabs(
+        [
+            "Quem cobrar primeiro",
+            "Onde está o risco",
+            "Quanto arrecadar",
+            "Situação da carteira",
+            "Modelos & Subgrupos",
+        ]
     )
     with aba1:
-        aba_ranking(devedores)
+        aba_ranking(devedores, base, meta, modelo_inad, modelo_rec)
     with aba2:
         aba_mapa_calor(base)
     with aba3:
         aba_projecao(devedores)
     with aba4:
         aba_carteira(situacao, base)
+    with aba5:
+        aba_modelos_subgrupos(base, meta)
+
+    st.markdown(
+        '<div class="rodape">Projeto Integrador BIINAR · Eixo II (2026/2) — '
+        "Camada individual sintética para fins acadêmicos · Imóveis IPTU Social excluídos por regra de negócio · "
+        "Ferramenta de apoio à decisão humana.</div>",
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":
     main()
-
